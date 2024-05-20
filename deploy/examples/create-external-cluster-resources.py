@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-# pylint: disable=E0606
-
 import errno
 import sys
 import json
@@ -34,7 +32,8 @@ py3k = False
 if sys.version_info.major >= 3:
     py3k = True
     import urllib.parse
-    from ipaddress import ip_address, IPv4Address
+    from ipaddress import ip_address
+    from ipaddress import IPv4Address
 
 ModuleNotFoundError = ImportError
 
@@ -590,9 +589,12 @@ class RadosJSON:
         try:
             if endpoint_str_ip[0] == "[":
                 endpoint_str_ip = endpoint_str_ip[1 : len(endpoint_str_ip) - 1]
-            ip_type = (
-                "IPv4" if type(ip_address(endpoint_str_ip)) is IPv4Address else "IPv6"
-            )
+            ip_type = type(ip_address(endpoint_str_ip))
+            if ip_type == IPv4Address:
+                ip_type = "IPv4"
+            else:
+                ip_type = "IPv6"
+
         except ValueError:
             ip_type = "FQDN"
         if not port.isdigit():
@@ -757,6 +759,7 @@ class RadosJSON:
             host_ip_type = self._invalid_endpoint(host_addr + ":80")
             import socket
 
+            ip = []
             # example output [(<AddressFamily.AF_INET: 2>, <SocketKind.SOCK_STREAM: 1>, 6, '', ('93.184.216.34', 80)), ...]
             # we need to get 93.184.216.34 so it would be ip[0][4][0]
             if host_ip_type == "IPv6":
