@@ -27,13 +27,11 @@ from os import path
 from email.utils import formatdate
 import requests
 from requests.auth import AuthBase
-
-py3k = False
-if sys.version_info.major >= 3:
-    py3k = True
-    import urllib.parse
-    from ipaddress import ip_address
-    from ipaddress import IPv4Address
+from io import StringIO
+from urllib.parse import urlparse
+from urllib.parse import urlencode as urlencode
+from ipaddress import ip_address
+from ipaddress import IPv4Address
 
 ModuleNotFoundError = ImportError
 
@@ -48,22 +46,6 @@ try:
 except ModuleNotFoundError as noModErr:
     print(f"Error: {noModErr}\nExiting the script...")
     sys.exit(1)
-
-try:
-    # for 2.7.x
-    from StringIO import StringIO
-except ModuleNotFoundError:
-    # for 3.x
-    from io import StringIO
-
-try:
-    # for 2.7.x
-    from urlparse import urlparse
-    from urllib import urlencode as urlencode
-except ModuleNotFoundError:
-    # for 3.x
-    from urllib.parse import urlparse
-    from urllib.parse import urlencode as urlencode
 
 try:
     from base64 import encodestring
@@ -234,19 +216,14 @@ class S3Auth(AuthBase):
         if "date" not in r.headers and "x-amz-date" not in r.headers:
             r.headers["date"] = formatdate(timeval=None, localtime=False, usegmt=True)
         signature = self.get_signature(r)
-        if py3k:
-            signature = signature.decode("utf-8")
+        signature = signature.decode("utf-8")
         r.headers["Authorization"] = f"AWS {self.access_key}:{signature}"
         return r
 
     def get_signature(self, r):
         canonical_string = self.get_canonical_string(r.url, r.headers, r.method)
-        if py3k:
-            key = self.secret_key.encode("utf-8")
-            msg = canonical_string.encode("utf-8")
-        else:
-            key = self.secret_key
-            msg = canonical_string
+        key = self.secret_key.encode("utf-8")
+        msg = canonical_string.encode("utf-8")
         h = hmac.new(key, msg, digestmod=sha)
         return encodestring(h.digest()).strip()
 
@@ -272,12 +249,8 @@ class S3Auth(AuthBase):
                 interesting_headers[lk] = headers[key].strip()
 
         # If x-amz-date is used it supersedes the date header.
-        if not py3k:
-            if "x-amz-date" in interesting_headers:
-                interesting_headers["date"] = ""
-        else:
-            if "x-amz-date" in interesting_headers:
-                interesting_headers["date"] = ""
+        if "x-amz-date" in interesting_headers:
+            interesting_headers["date"] = ""
 
         buf = f"{method}\n"
         for key in sorted(interesting_headers.keys()):
@@ -589,12 +562,7 @@ class RadosJSON:
         try:
             if endpoint_str_ip[0] == "[":
                 endpoint_str_ip = endpoint_str_ip[1 : len(endpoint_str_ip) - 1]
-            ip_type = type(ip_address(endpoint_str_ip))
-            if ip_type == IPv4Address:
-                ip_type = "IPv4"
-            else:
-                ip_type = "IPv6"
-
+            ip_type = ("IPv4" if type(ip_address(endpoint_str_ip)) is IPv4Address else "IPv6")
         except ValueError:
             ip_type = "FQDN"
         if not port.isdigit():
@@ -1289,16 +1257,6 @@ class RadosJSON:
                 )
                 sys.stderr.write(err_msg)
                 return None, None, False, "-1"
-
-        # if it is python2, don't check for ceph version for adding `info=read` cap(rgw_validation)
-        if sys.version_info.major < 3:
-            jsonoutput = json.loads(output)
-            return (
-                jsonoutput["keys"][0]["access_key"],
-                jsonoutput["keys"][0]["secret_key"],
-                False,
-                "",
-            )
 
         # separately add info=read caps for rgw-endpoint ip validation
         info_cap_supported = True
